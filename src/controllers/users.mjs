@@ -81,7 +81,7 @@ const Users = class Users {
         }).catch(() => {
           res.status(500).json({
             code: 500,
-            message: 'Internal Server error'
+            message: 'Intenal Server error'
           });
         });
       } catch (err) {
