@@ -73,10 +73,33 @@ const Users = class Users {
     });
   }
 
+  getAll() {
+    this.app.get('/users', (req, res) => {
+      try {
+        this.UserModel.find().then((users) => {
+          res.status(200).json(users);
+        }).catch(() => {
+          res.status(500).json({
+            code: 500,
+            message: 'Internal Server error'
+          });
+        });
+      } catch (err) {
+        console.error(`[ERROR] users -> ${err}`);
+
+        res.status(400).json({
+          code: 400,
+          message: 'Bad request'
+        });
+      }
+    });
+  }
+
   run() {
     this.create();
     this.showById();
     this.deleteById();
+    this.getAll();
   }
 };
 
