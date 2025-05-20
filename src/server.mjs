@@ -1,12 +1,12 @@
-// Dependencies
 import express from 'express';
 import mongoose from 'mongoose';
 import bodyParser from 'body-parser';
 import compression from 'compression';
 import cors from 'cors';
 import helmet from 'helmet';
-
-// Core
+import jwt from 'jsonwebtoken';
+// eslint-disable-next-line import/no-extraneous-dependencies
+import rateLimit from 'express-rate-limit';
 import config from './config.mjs';
 import routes from './controllers/routes.mjs';
 
@@ -25,7 +25,22 @@ const Server = class Server {
         useUnifiedTopology: true
       });
 
-      const close = () => {
+      this.connect.on('error', (err) => {
+        console.error(`[ERROR] api dbConnect() -> ${err}`);
+        setTimeout(() => {
+          console.log('[ERROR] api dbConnect() -> mongodb error');
+          this.dbConnect();
+        }, 5000);
+      });
+
+      this.connect.on('disconnected', () => {
+        console.log('[DISCONNECTED] api dbConnect() -> mongodb disconnected');
+        setTimeout(() => {
+          this.dbConnect();
+        }, 5000);
+      });
+
+      process.on('SIGINT', () => {
         this.connect.close((error) => {
           if (error) {
             console.error('[ERROR] api dbConnect() close() -> mongodb error', error);
@@ -33,31 +48,14 @@ const Server = class Server {
             console.log('[CLOSE] api dbConnect() -> mongodb closed');
           }
         });
-      };
-
-      this.connect.on('error', (err) => {
-        setTimeout(() => {
-          console.log('[ERROR] api dbConnect() -> mongodb error');
-          this.connect = this.dbConnect(host);
-        }, 5000);
-
-        console.error(`[ERROR] api dbConnect() -> ${err}`);
-      });
-
-      this.connect.on('disconnected', () => {
-        setTimeout(() => {
-          console.log('[DISCONNECTED] api dbConnect() -> mongodb disconnected');
-          this.connect = this.dbConnect(host);
-        }, 5000);
-      });
-
-      process.on('SIGINT', () => {
-        close();
         console.log('[API END PROCESS] api dbConnect() -> close mongodb connection');
         process.exit(0);
       });
+
+      return this.connect;
     } catch (err) {
       console.error(`[ERROR] api dbConnect() -> ${err}`);
+      throw err;
     }
   }
 
@@ -68,10 +66,47 @@ const Server = class Server {
     this.app.use(bodyParser.json());
   }
 
+  authMiddleware() {
+    return (req, res, next) => {
+      const authHeader = req.headers.authorization;
+
+      if (authHeader && authHeader.startsWith('Bearer ')) {
+        const token = authHeader.split(' ')[1];
+
+        try {
+          const user = jwt.verify(token, 'root'); // 👈 remplace `this.config.jwtSecret`
+          req.auth = user;
+          next();
+          return; // 👈 pour satisfaire ESLint
+        } catch (error) {
+          return res.status(401).json({
+            code: 401,
+            message: 'Invalid token'
+          });
+        }
+      }
+
+      return res.status(401).json({
+        code: 401,
+        message: 'Unauthorized'
+      });
+    };
+  }
+
   routes() {
-    new routes.Users(this.app, this.connect);
-    new routes.Albums(this.app, this.connect);
-    new routes.Photos(this.app, this.connect);
+    const authMiddleware = this.authMiddleware();
+
+    const limiter = rateLimit({
+      windowMs: 15 * 60 * 1000,
+      max: 10,
+      message: { code: 429, message: 'Too many login attempts, please try again later.' }
+    });
+
+    new routes.Users(this.app, this.connect, authMiddleware, limiter);
+    new routes.Photos(this.app, this.connect, authMiddleware, limiter);
+    new routes.Albums(this.app, this.connect, authMiddleware, limiter);
+    this.app.use('/auth', limiter);
+    new routes.Auth(this.app, this.connect);
 
     this.app.use((req, res) => {
       res.status(404).json({
@@ -92,7 +127,9 @@ const Server = class Server {
       this.security();
       this.middleware();
       this.routes();
-      this.app.listen(this.config.port);
+      this.app.listen(this.config.port, () => {
+        console.log(`[SERVER] Running on port ${this.config.port}`);
+      });
     } catch (err) {
       console.error(`[ERROR] Server -> ${err}`);
     }

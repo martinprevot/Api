@@ -1,15 +1,16 @@
 import UserModel from '../models/user.mjs';
 
 const Users = class Users {
-  constructor(app, connect) {
+  constructor(app, connect, auth) {
     this.app = app;
+    this.auth = auth;
     this.UserModel = connect.model('User', UserModel);
 
     this.run();
   }
 
   deleteById() {
-    this.app.delete('/user/:id', (req, res) => {
+    this.app.delete('/user/:id', this.auth, (req, res) => {
       try {
         this.UserModel.findByIdAndDelete(req.params.id).then((user) => {
           res.status(200).json(user || {});
