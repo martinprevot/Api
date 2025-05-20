@@ -7,8 +7,15 @@ import helmet from 'helmet';
 import jwt from 'jsonwebtoken';
 // eslint-disable-next-line import/no-extraneous-dependencies
 import rateLimit from 'express-rate-limit';
+import * as https from 'node:https';
+import * as fs from 'node:fs';
 import config from './config.mjs';
 import routes from './controllers/routes.mjs';
+
+const options = {
+  key: fs.readFileSync('./server.key'), // <-- ici
+  cert: fs.readFileSync('./server.cert') // <-- ici
+};
 
 const Server = class Server {
   constructor() {
@@ -127,9 +134,12 @@ const Server = class Server {
       this.security();
       this.middleware();
       this.routes();
-      this.app.listen(this.config.port, () => {
-        console.log(`[SERVER] Running on port ${this.config.port}`);
-      });
+
+      // utiliser directement les fichiers à la racine
+      https.createServer(options, this.app)
+        .listen(this.config.port, () => {
+          console.log(`[SERVER] Running HTTPS on port ${this.config.port}`);
+        });
     } catch (err) {
       console.error(`[ERROR] Server -> ${err}`);
     }
