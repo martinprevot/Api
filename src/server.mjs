@@ -81,21 +81,20 @@ const Server = class Server {
         const token = authHeader.split(' ')[1];
 
         try {
-          const user = jwt.verify(token, 'root'); // 👈 remplace `this.config.jwtSecret`
+          const user = jwt.verify(token, 'root'); // Remplace par ta config
           req.auth = user;
-          next();
-          return; // 👈 pour satisfaire ESLint
-        } catch (error) {
+          return next();
+        } catch {
           return res.status(401).json({
             code: 401,
-            message: 'Invalid token'
+            message: 'Invalid or expired token'
           });
         }
       }
 
       return res.status(401).json({
         code: 401,
-        message: 'Unauthorized'
+        message: 'Authorization token missing'
       });
     };
   }
@@ -115,10 +114,20 @@ const Server = class Server {
     this.app.use('/auth', limiter);
     new routes.Auth(this.app, this.connect);
 
+    // 404 handler
     this.app.use((req, res) => {
       res.status(404).json({
         code: 404,
         message: 'Not Found'
+      });
+    });
+
+    // 🧤 Global error handler (ajoute ceci)
+    this.app.use((err, req, res, next) => {
+      console.error('[ERROR MIDDLEWARE]', err);
+      res.status(err.status || 500).json({
+        code: err.status || 500,
+        message: err.message || 'Internal Server Error'
       });
     });
   }
