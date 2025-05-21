@@ -100,18 +100,16 @@ const Server = class Server {
   }
 
   routes() {
-    const authMiddleware = this.authMiddleware();
-
     const limiter = rateLimit({
       windowMs: 15 * 60 * 1000,
       max: 10,
       message: { code: 429, message: 'Too many login attempts, please try again later.' }
     });
-
-    new routes.Users(this.app, this.connect, authMiddleware, limiter);
-    new routes.Photos(this.app, this.connect, authMiddleware, limiter);
-    new routes.Albums(this.app, this.connect, authMiddleware, limiter);
-    this.app.use('/auth', limiter);
+    new routes.Users(this.app, this.connect, this.authMiddleware, limiter);
+    new routes.Photos(this.app, this.connect, this.authMiddleware, limiter);
+    new routes.Albums(this.app, this.connect, this.authMiddleware, limiter);
+    new routes.Random(this.app, this.connect, this.authMiddleware, limiter);
+    // this.app.use('/auth', limiter);
     new routes.Auth(this.app, this.connect);
 
     // 404 handler
